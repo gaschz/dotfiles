@@ -340,6 +340,10 @@ _fzf_comprun() {
   esac
 }
 
+alias l='ls -al'
+alias ..='cd ..'
+alias ...='cd ../..'
+
 ## }}}
 ## {{{ End
 ## Source local shell configuration file.

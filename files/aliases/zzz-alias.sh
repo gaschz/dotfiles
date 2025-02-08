@@ -1,0 +1,5 @@
+alias l='ls --color=auto -al'
+alias ..='cd ..'
+alias ...='cd ../..'
+alias qusaltar='tar cvzf /Daten/donner0/qusal.tar.gz /srv/salt/qusal /root/*salt /etc/salt/minion.d/qusal.conf'
+alias qusaluntar='tar xvzf /Daten/donner0/qusal.tar.gz -C /'

@@ -1,0 +1,9 @@
+{#
+SPDX-FileCopyrightText: 2024 Blacky <blacky@blackies.de>
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+#}
+
+base:
+  '*':
+    - dotfiles.copy-root
