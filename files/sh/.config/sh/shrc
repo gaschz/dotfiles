@@ -34,9 +34,10 @@ alias cp="cp -i"
 alias mv="mv -i"
 alias ls="ls -hF --group-directories-first --color=auto"
 if has lsblk; then
-  _lsblk_options="NAME,FSTYPE,LABEL,SIZE,FSAVAIL,FSUSE%,MOUNTPOINT"
-  alias lsblk='lsblk -o ${_lsblk_options}'
-  alias lsblku='lsblk -o ${_lsblk_options},UUID,PARTUUID'
+  lsblk_options="NAME,FSTYPE,LABEL,SIZE,FSAVAIL,FSUSE%,MOUNTPOINT"
+  alias lsblk='lsblk -o ${lsblk_options}'
+  alias lsblku='lsblk -o ${lsblk_options},UUID,PARTUUID'
+  unset lsblk_options
 fi
 if ! grep --color 2>&1 | grep -qE -e "(unrecognized|unknown) option" &&
   ! grep --exclude 2>&1 | grep -qE -e "(unrecognized|unknown) option"
@@ -110,7 +111,8 @@ has qubesctl && {
   alias qctlu="qctl --skip-dom0 --targets"
   qctlus(){
     test -n "${2-}" || return 1
-    qubesctl --skip-dom0 --targets "${1}" state.apply "${2}"
+    # shellcheck disable=SC3058
+    qubesctl --skip-dom0 --targets "${1}" state.apply "${@#"${1}"}"
   }
 }
 has gpg && alias gpgs="gpg --show-keys"
@@ -124,9 +126,10 @@ has tmux && {
   alias tcl="clear && t clear-history" # clear buffer cus memory
   tcla(){
     ## Clear all the panes of the current session.
-    for _t_pane in $(tmux list-panes -s -F '#{pane_id}'); do
-      tmux clear-history -t "${_t_pane}"
+    for t_pane in $(tmux list-panes -s -F '#{pane_id}'); do
+      tmux clear-history -t "${t_pane}"
     done
+    unset t_pane
   }
 }
 ## }}}
@@ -149,7 +152,7 @@ then
     # shellcheck disable=SC2139,SC2140
     alias "g${key}"="git ${key}"
   done
-  unset g_alias
+  unset key g_alias
 fi
 ## }}}
 ## }}}
@@ -160,23 +163,26 @@ case "${TERM-}" in
   iterm|*-truecolor)
     export COLORTERM=truecolor; color_prompt=yes
     ;;
-  *-color|*-256color|linux*)
+  *-color|*-256color|linux*|vt100*|vt220*)
     color_prompt=yes
     ;;
-  ""|dumb|vt100*|vt220*)
+  ""|dumb)
     color_prompt=no
     ;;
   *)
     color_prompt=no
     ;;
 esac
+if test -n "${NO_COLOR-}"; then
+  color_prompt=no
+fi
 
 ## Colorise "ls" output.
 if test "${color_prompt-}" = "yes"; then
   if has dircolors; then
     ## Use dircolors if available.
     if test -r "${XDG_CONFIG_HOME}/dircolors/dircolors"; then
-      dircolors="$(dircolors -b "${XDG_CONFIG_HOME}/dircolors/dircolors")"
+      dircolors="$(dircolors -b -- "${XDG_CONFIG_HOME}/dircolors/dircolors")"
       eval "${dircolors}"
     else
       dircolors="$(dircolors -b)"
@@ -223,9 +229,10 @@ fi
 _get_prompt_time(){
   test -n "${SECONDS:-}" || return
   # shellcheck disable=SC2154
-  _ptime="$((SECONDS-_saved_prompt_time))"
+  ptime="$((SECONDS-_saved_prompt_time))"
   printf '%02d:%02d:%02d' \
-    "$((_ptime/3600))" "$(((_ptime%3600)/60))" "$((_ptime%60))"
+    "$((ptime/3600))" "$(((ptime%3600)/60))" "$((ptime%60))"
+  unset ptime
 }
 
 _git_prompt_info(){
@@ -241,19 +248,19 @@ _git_prompt_info(){
   test "${ref-}" || return
   # shellcheck disable=2039,3003
   case "${TERM-}" in
-    *-256color|xterm-kitty) branchcolor=$'\e[38;5;31m' ;;
-    *-88color|rxvt-unicode) branchcolor=$'\e[38;5;22m' ;;
-    *) branchcolor=$'\e[00;94m' ;;
+    *-256color|xterm-kitty) branchcolor=$'\033[38;5;31m' ;;
+    *-88color|rxvt-unicode) branchcolor=$'\033[38;5;22m' ;;
+    *) branchcolor=$'\033[0;94m' ;;
   esac
   if test -n "${ZSH_VERSION-}"; then
     # shellcheck disable=2016
-    if test "${color_prompt}" = "yes"; then
-      print -Pn '(%%{${branchcolor}%%}%20>...>${ref}%<<%%{\e[00m%%})'
+    if test "${color_prompt-}" = "yes"; then
+      print -Pn '(%%{${branchcolor}%%}%20>...>${ref}%<<%%{\033[0m%%})'
     else
       print -Pn '(%20>...>${ref}%<<)'
     fi
   else
-    if test "${color_prompt}" = "yes"; then
+    if test "${color_prompt-}" = "yes"; then
       printf '%s' "(${branchcolor}${ref}${reset_color})"
     else
       printf '%s' "(${ref})"
@@ -263,22 +270,22 @@ _git_prompt_info(){
 }
 
 # shellcheck disable=SC2034
-reset_color="$(printf '%b' '\e[00m')"
+reset_color="$(printf '%b' '\033[0m')"
 
 # shellcheck disable=SC2034
 ## Use echotc Co? Only available by default for zsh, not bash.
 case "${TERM-}" in
   *-256color|xterm-kitty)
-    usercolor="$(printf '%b' "\e[38;5;184m")"
-    dircolor="$(printf '%b' "\e[38;5;27m")"
+    usercolor="$(printf '%b' "\033[38;5;184m")"
+    dircolor="$(printf '%b' "\033[38;5;27m")"
     ;;
   *-88color|rxvt-unicode)
-    usercolor="$(printf '%b' "\e[38;5;56m")"
-    dircolor="$(printf '%b' "\e[38;5;23m")"
+    usercolor="$(printf '%b' "\033[38;5;56m")"
+    dircolor="$(printf '%b' "\033[38;5;23m")"
     ;;
   *)
-    usercolor="$(printf '%b' "\e[00;93m")"
-    dircolor="$(printf '%b' "\e[01;34m")"
+    usercolor="$(printf '%b' "\033[0;93m")"
+    dircolor="$(printf '%b' "\033[1;34m")"
     ;;
 esac
 
@@ -290,7 +297,7 @@ esac
 # shellcheck disable=SC2034
 uid="$(id -u)"
 if test "${uid}" = "0"; then
-  usercolor="$(printf '%b' "\e[00;97m")"
+  usercolor="$(printf '%b' "\033[0;97m")"
   ps1_symbol="#"
 fi
 unset uid
@@ -303,6 +310,8 @@ if test "${color_prompt-}" = "yes"; then
 else
   PS1="${user}@$(hostname -s)${ps1_symbol} "
 fi
+
+unset user uid
 ## }}}
 ## {{{ External Functions
 
@@ -313,6 +322,7 @@ source_readable(){
     # shellcheck disable=SC1090
     ! test -r "${_file}" || . "${_file}"
   done
+  unset _file
 }
 
 _fzf_comprun() {
@@ -338,6 +348,7 @@ _fzf_comprun() {
       fzf --preview 'test -d {} || cat -- {}' "${@}"
       ;;
   esac
+  unset _fzf_command
 }
 
 alias l='ls -al'
