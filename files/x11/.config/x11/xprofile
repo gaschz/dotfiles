@@ -19,7 +19,9 @@ fi
 ## If running normal OS or Qubes: Dom0, apply settings.
 # shellcheck disable=3028
 hostname="${HOSTNAME:-$(hostname)}"
-if ! command -v qubesdb-read >/dev/null || test "${hostname}" = "dom0"; then
+if ! command -v qubesdb-read >/dev/null || test "${hostname}" = "dom0" ||
+  test -f /var/run/qubes-service/guivm
+then
   ## Decrease key repeat delay to X ms.
   ## Increase key repeat rate to Y per second.
   xset r rate 275 60
@@ -32,6 +34,7 @@ if ! command -v qubesdb-read >/dev/null || test "${hostname}" = "dom0"; then
 
   #qvm-prefs dom0 keyboard_layout "us+dvorak+grp:win_space_toggle,ctrl:nocaps"
 fi
+unset hostname
 
 ## Autostart desktop applications if the WM does not.
 desktop_autostart(){
@@ -45,11 +48,34 @@ desktop_autostart(){
 
   for f in "${autostart_etc}"/*.desktop "${autostart_home}"/*.desktop; do
     test -r "${f}" || continue
+    ## TODO: check other conditions: (Not|Only)ShowIn
     # shellcheck disable=SC2091
+    autostart_hidden="$(awk -F '=' -- '/^Hidden=/{print $2}' "${f}")"
+    if test "${autostart_hidden}" = "true"; then
+      continue
+    fi
+    autostart_tryexec="$(awk -F '=' -- '/^TryExec=/{print $2}' "${f}")"
+    if test -n "${autostart_tryexec}"; then
+      case "${autostart_tryexec}" in
+        /*) test -x "${autostart_tryexec}" || continue;;
+        *) command -v "${autostart_tryexec}" >/dev/null || continue;;
+      esac
+    fi
+    autostart_path="$(awk -F '=' -- '/^Path=/{print $2}' "${f}")"
     autostart_exec="$(awk -F '=' -- '/^Exec=/{print $2}' "${f}")"
-    command -v "${autostart_exec%% *}" >/dev/null || continue
+    case "${autostart_exec}" in
+      /*) test -x "${autostart_exec}" || continue;;
+      *) command -v "${autostart_exec}" >/dev/null || continue;;
+    esac
+    if test -n "${autostart_path}"; then
+      if ! test -d "${autostart_path}"; then
+        continue
+      fi
+      cd "${autostart_path}" || continue
+    fi
     ${autostart_exec} &
   done
+  unset f autostart_hidden autostart_tryexec autostart_exec autostart_path
 }
 
 ## Source Xorg profiles.
@@ -59,6 +85,7 @@ if test -r "${HOME}/.xprofile.local"; then
     # shellcheck disable=SC1090,SC1091
     ! test -r "${x11_profile}" || . "${x11_profile}"
   done
+  unset x11_profile
 fi
 
 : "${wm_list:="dwm"}"
@@ -69,6 +96,7 @@ for wm in ${wm_list}; do
     while true; do
       xroot_name="$(display-statusbar)"
       xsetroot -name "${xroot_name}"
+      unset xroot_name
       sleep 60
     done &
   fi
@@ -76,5 +104,7 @@ for wm in ${wm_list}; do
   ${wm} &
   wm_pid="${!}"
 done
+unset wm
 
 test -z "${wm_pid:-}" || wait "${wm_pid}"
+unset wm_pid

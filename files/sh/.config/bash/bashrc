@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-## SPDX-FileCopyrightText: 2023 Benjamin Grande M. S. <ben.grande.b@gmail.com>
+## SPDX-FileCopyrightText: 2023 - 2025 Benjamin Grande M. S. <ben.grande.b@gmail.com>
 ##
 ## SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -43,7 +43,11 @@ _reset_line() {
   esac
   ## Credit: Can't find the source, posted on StackExchange or alike.
   ## Does not work well on Bash 5.0 and older.
-  bash_version_clean="$(printf '%s\n' "${BASH_VERSION%.*}" | tr -d ".")"
+  bash_version_clean="${BASH_VERSION%.*}"
+  bash_version_clean="${bash_version_clean//\./}"
+  if [[ ! ${bash_version_clean} =~ ^[0-9]+$ ]]; then
+    return
+  fi
   if test "${bash_version_clean}" -lt 51; then
     unset bash_version_clean
     return
@@ -56,15 +60,17 @@ _reset_line() {
   ## On pending input, assume it's been echoed and we're not in first column.
   ## Otherwise ask the terminal for current column and read it from input.
   if read -t 0 || {
-    IFS='[;' read -s -r -d'R' -p$'\033[6n' _ _ cur_y && [[ ${cur_y} != 1 ]]
+    # shellcheck disable=SC2154
+    IFS='[;' read -s -r -d'R' -p "${_t_u7}" _ _ cur_y && [[ ${cur_y} != 1 ]]
   }
   then
     unset cur_y
     ## Print line ending char with reversed video and end with newline.
     if test "${color_prompt-}" = "yes"; then
-      printf '%b' "\033[41m\033[0m\033[7m%\033[m\n\r"
+      # shellcheck disable=SC2154
+      printf '%s\n\r' "${_t_sgr0}${_t_rev}%${_t_sgr0}"
     else
-      printf '%b' "%\n\r"
+      printf '%s\n\r' "%"
     fi
   fi
 }
@@ -72,10 +78,13 @@ _reset_line() {
 _print_ec(){
   test "${_ec_ps1}" = "0" && return
   if test "${color_prompt:-}" = "yes"; then
-    printf '%b%s%b' "(\001\033[31m\002" "${_ec_ps1}" "\001\033[0m\002)"
+    # shellcheck disable=SC2154
+    printf '(\001%s\002%s\001%s\002)' "${_t_setaf_1}" "${_ec_ps1}" \
+      "${_t_sgr0}"
   else
-    printf '%s' "(${_ec_ps1})"
+    printf '(%s)' "${_ec_ps1}"
   fi
+  unset _ec_ps1
 }
 
 _save_ec() { _ec_ps1=$?; }
@@ -85,10 +94,10 @@ newline=$'\n'
 # shellcheck disable=SC2154
 if test "${color_prompt:-}" = "yes"; then
   # shellcheck disable=SC2154
-  PS1="\$(_reset_line)\$(resize-terminal)\[\033[35m\][\[${reset_color}\]"
+  PS1="\$(_reset_line)\$(resize-terminal)\[${_t_setaf_5}\][\[${_t_sgr0}\]"
   PS1="${PS1}${debian_chroot:+(${debian_chroot})}\[${usercolor}\]\u@\h "
-  PS1="${PS1}\[${dircolor}\]\w\[${reset_color}\]\$(_git_prompt_info)"
-  PS1="${PS1}\[\033[35m\]]\[${reset_color}\]${newline-}\$(_print_ec)"
+  PS1="${PS1}\[${dircolor}\]\w\[${_t_sgr0}\]\$(_git_prompt_info)"
+  PS1="${PS1}\[${_t_setaf_5}\]]\[${_t_sgr0}\]${newline-}\$(_print_ec)"
   PS1="${PS1}${ps1_symbol} "
 else
   PS1="\$(_reset_line)\$(resize-terminal)"
@@ -100,7 +109,7 @@ fi
 case "${TERM-}" in
   screen*|xterm*|rxvt*)
     ## Set window title
-    PS1="\[\e]0;${debian_chroot:+(${debian_chroot})}\u@\h: \w\a\]${PS1}"
+    PS1="\[\033]0;${debian_chroot:+(${debian_chroot})}\u@\h: \w\a\]${PS1}"
     ;;
   *) ;;
 esac
@@ -112,14 +121,14 @@ case "${TERM-}" in
   *)
     ## Reset cursor to steady block after command input and before execution.
     # shellcheck disable=SC2034
-    PS0="\e[2 q\2"
+    PS0="\033[2 q\2"
     ;;
 esac
 if ! shopt -oq posix; then
   source_readable /usr/share/bash-completion/bash_completion
 fi
 
-unset newline ps1_symbol
+unset newline ps1_symbol dircolor usercolor
 ## }}}
 ## {{{ Plugins
 if has zoxide; then
